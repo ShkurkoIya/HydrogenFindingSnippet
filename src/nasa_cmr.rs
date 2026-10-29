@@ -1,7 +1,20 @@
+use crate::errors::GatewayError;
+
 use super::errors::Result;
 use super::models::BoundingBox;
-use reqwest::Client;
+use reqwest::{Client, header::ACCEPT, header::USER_AGENT};
 use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+struct CmrJsonResponse {
+    items: Vec<CmrItem>,
+}
+
+#[derive(Deserialize, Debug)]
+struct CmrItem {
+    title: String,
+    links: Option<Vec<CmrLink>>,
+}
 
 #[derive(Deserialize, Debug)]
 struct CmrResponse {
@@ -44,30 +57,29 @@ impl CmrClient {
         temporal: &str,
     ) -> Result<Vec<(String, String)>> {
         // Формируем URL к поисковому движку NASA
-        let url = format!(
-            "https://nasa.gov?\
-                 short_name={}&version=061&bounding_box={}&temporal={}",
-            short_name,
-            bbox.to_cmr_string(),
-            temporal
-        );
+        let url = "https://cmr.earthdata.nasa.gov/search/granules.json";
 
-        // Делаем асинхронный HTTP-запрос
-        let response: CmrResponse = self
+        let params = [
+            ("short_name", short_name),
+            ("version", "061"),
+            ("bounding_box", &bbox.to_cmr_string()),
+            ("temporal", temporal),
+        ];
+
+        let request_builder = self
             .http_client
-            .get(&url)
-            .header("User-Agent", "HydrogenGateway/1.0")
-            .send()
-            .await?
-            .json()
-            .await?;
+            .get(url)
+            .query(&params)
+            .header(USER_AGENT, "HydrogenGateway/1.0")
+            .header(ACCEPT, "application/json");
+
+        let response: CmrResponse = request_builder.send().await?.json().await?;
 
         let mut target_links = Vec::new();
 
-        // Парсим ответ и вытягиваем прямые ссылки на скачивание
         for entry in response.feed.entry {
             if let Some(links) = entry.links {
-                // "data#" в поле rel означает, что это ссылка на сам файл данных, а не на картинку-превью
+                // Ищем ссылку на скачивание (кликая по rel, содержащему "data#")
                 if let Some(data_link) = links.iter().find(|l| l.rel.contains("data#")) {
                     target_links.push((entry.title.clone(), data_link.href.clone()));
                 }

@@ -1,3 +1,1 @@
 # HydrogenFindingSnippet
-# HydrogenFindingSnippet
-# HydrogenFindingSnippet

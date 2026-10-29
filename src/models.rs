@@ -22,7 +22,7 @@ impl BoundingBox {
 
     pub fn to_cmr_string(&self) -> String {
         format!(
-            "{}, {}, {}, {}",
+            "{},{},{},{}",
             self.min_lon, self.min_lat, self.max_lon, self.max_lat
         )
     }
